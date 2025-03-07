@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat em Tempo Real</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #e5ddd5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 600px;
+            height: 80vh;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background-color: #075e54;
+            color: white;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .chat-box {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #e5ddd5;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 8px;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .message.user {
+            background-color: #dcf8c6;
+            align-self: flex-end;
+            border-bottom-right-radius: 0;
+        }
+
+        .message.other {
+            background-color: #ffffff;
+            align-self: flex-start;
+            border-bottom-left-radius: 0;
+        }
+
+        .message::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-style: solid;
+        }
+
+        .message.user::after {
+            border-width: 0 0 10px 10px;
+            border-color: transparent transparent #dcf8c6 transparent;
+            right: -10px;
+            bottom: 0;
+        }
+
+        .message.other::after {
+            border-width: 0 10px 10px 0;
+            border-color: transparent #ffffff transparent transparent;
+            left: -10px;
+            bottom: 0;
+        }
+
+        .chat-footer {
+            display: flex;
+            padding: 10px;
+            background-color: #f0f0f0;
+        }
+
+        .chat-footer input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            outline: none;
+        }
+
+        .chat-footer button {
+            background-color: #075e54;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin-left: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .chat-footer button:hover {
+            background-color: #0a705f;
+        }
+
+        .modal {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .modal-content input {
+            width: 80%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .modal-content button {
+            padding: 10px 20px;
+            margin-top: 10px;
+            border: none;
+            background-color: #075e54;
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .modal-content button:hover {
+            background-color: #0a705f;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div id="usernameModal" class="modal">
+            <div class="modal-content">
+                <h2>Bem-vindo!</h2>
+                <p>Por favor, insira seu nome de usuário:</p>
+                <input type="text" id="usernameInput" placeholder="Nome de usuário" required>
+                <button id="enterChatBtn">Entrar no Chat</button>
+            </div>
+        </div>
+        <div class="chat-header">
+            <h1>Chat em Tempo Real</h1>
+        </div>
+        <div id="chat" class="chat-box"></div>
+        <form id="messageForm" class="chat-footer">
+            <input type="text" id="messageInput" placeholder="Digite sua mensagem..." autocomplete="off" required>
+            <button type="submit">➤</button>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const socket = io();
+            const chat = document.getElementById('chat');
+            const messageForm = document.getElementById('messageForm');
+            const messageInput = document.getElementById('messageInput');
+            const usernameModal = document.getElementById('usernameModal');
+            const usernameInput = document.getElementById('usernameInput');
+            const enterChatBtn = document.getElementById('enterChatBtn');
+
+            let username = '';
+
+            function addMessage(message, sender) {
+                if (!sender || sender.trim() === '') return;
+
+                const messageElement = document.createElement('div');
+                messageElement.textContent = message;
+                messageElement.classList.add('message');
+
+                if (sender === username) {
+                    messageElement.classList.add('user');
+                } else {
+                    messageElement.classList.add('other');
+                }
+
+                chat.appendChild(messageElement);
+                chat.scrollTop = chat.scrollHeight;
+            }
+
+            enterChatBtn.addEventListener('click', () => {
+                username = usernameInput.value.trim();
+                if (username) {
+                    socket.emit('set username', username);
+                    usernameModal.style.display = 'none';
+                }
+            });
+
+            messageForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const message = messageInput.value.trim();
+                if (message) {
+                    socket.emit('chat message', message);
+                    messageInput.value = '';
+                }
+            });
+
+            socket.on('chat message', (msg) => {
+                addMessage(`${msg.user}: ${msg.text}`, msg.user);
+            });
+
+            socket.on('user connected', (msg) => {
+                addMessage(msg, 'system');
+            });
+
+            socket.on('user disconnected', (msg) => {
+                addMessage(msg, 'system');
+            });
+        });
+    </script>
+</body>
+</html>
